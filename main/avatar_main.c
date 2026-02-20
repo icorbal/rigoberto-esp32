@@ -256,6 +256,48 @@ static esp_err_t talk_post_handler(httpd_req_t *req)
     return send_json(req, 200, "{\"ok\":true}");
 }
 
+static esp_err_t perform_post_handler(httpd_req_t *req)
+{
+    char buf[384] = {0};
+    int n = httpd_req_recv(req, buf, MIN((int)req->content_len, (int)sizeof(buf) - 1));
+    if (n <= 0) return send_json(req, 400, "{\"ok\":false,\"error\":\"empty body\"}");
+
+    cJSON *root = cJSON_Parse(buf);
+    if (!root) return send_json(req, 400, "{\"ok\":false,\"error\":\"invalid json\"}");
+
+    const cJSON *emotion = cJSON_GetObjectItemCaseSensitive(root, "emotion");
+    const cJSON *talk = cJSON_GetObjectItemCaseSensitive(root, "talk");
+    const cJSON *duration_ms = cJSON_GetObjectItemCaseSensitive(root, "duration_ms");
+    const cJSON *text = cJSON_GetObjectItemCaseSensitive(root, "text");
+
+    int auto_duration = 0;
+    if (cJSON_IsString(text) && text->valuestring) {
+        size_t l = strlen(text->valuestring);
+        auto_duration = (int)l * 70; // ~70ms per char speech estimate
+        if (auto_duration < 900) auto_duration = 900;
+        if (auto_duration > 12000) auto_duration = 12000;
+    }
+
+    portENTER_CRITICAL(&state_mux);
+    if (cJSON_IsString(emotion)) {
+        desired_expr = str_to_expr(emotion->valuestring);
+    }
+
+    if (cJSON_IsBool(talk)) {
+        desired_talk = cJSON_IsTrue(talk);
+    }
+
+    if (cJSON_IsNumber(duration_ms) && duration_ms->valuedouble > 0) {
+        talk_until_us = esp_timer_get_time() + (int64_t)(duration_ms->valuedouble * 1000.0);
+    } else if (auto_duration > 0) {
+        talk_until_us = esp_timer_get_time() + (int64_t)auto_duration * 1000LL;
+    }
+    portEXIT_CRITICAL(&state_mux);
+
+    cJSON_Delete(root);
+    return send_json(req, 200, "{\"ok\":true}");
+}
+
 static httpd_handle_t start_http_service(void)
 {
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
@@ -282,10 +324,16 @@ static httpd_handle_t start_http_service(void)
         .method = HTTP_POST,
         .handler = talk_post_handler,
     };
+    httpd_uri_t u_perform = {
+        .uri = "/v1/perform",
+        .method = HTTP_POST,
+        .handler = perform_post_handler,
+    };
 
     httpd_register_uri_handler(server, &u_state);
     httpd_register_uri_handler(server, &u_emotion);
     httpd_register_uri_handler(server, &u_talk);
+    httpd_register_uri_handler(server, &u_perform);
 
     ESP_LOGI(TAG, "HTTP service ready on port 8080");
     return server;
