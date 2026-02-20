@@ -12,3 +12,7 @@ __pycache__/
 
 # macOS
 .DS_Store
+
+# Local secrets (never commit)
+sdkconfig.defaults.local
+sdkconfig.old

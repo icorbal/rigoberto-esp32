@@ -291,21 +291,26 @@ static httpd_handle_t start_http_service(void)
     return server;
 }
 
-static void start_softap(void)
+static void start_network(void)
 {
     ESP_ERROR_CHECK(esp_netif_init());
     ESP_ERROR_CHECK(esp_event_loop_create_default());
+
     esp_netif_create_default_wifi_ap();
+    bool has_sta = strlen(CONFIG_RIGO_WIFI_STA_SSID) > 0;
+    if (has_sta) {
+        esp_netif_create_default_wifi_sta();
+    }
 
     wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
     ESP_ERROR_CHECK(esp_wifi_init(&cfg));
 
     wifi_config_t ap_config = {
         .ap = {
-            .ssid = "rigo-box3",
+            .ssid = CONFIG_RIGO_WIFI_AP_SSID,
             .ssid_len = 0,
             .channel = 1,
-            .password = "rigoberto",
+            .password = CONFIG_RIGO_WIFI_AP_PASSWORD,
             .max_connection = 4,
             .authmode = WIFI_AUTH_WPA_WPA2_PSK,
             .pmf_cfg = {
@@ -318,12 +323,30 @@ static void start_softap(void)
         ap_config.ap.authmode = WIFI_AUTH_OPEN;
     }
 
-    ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_AP));
+    wifi_mode_t mode = has_sta ? WIFI_MODE_APSTA : WIFI_MODE_AP;
+    ESP_ERROR_CHECK(esp_wifi_set_mode(mode));
     ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_AP, &ap_config));
-    ESP_ERROR_CHECK(esp_wifi_start());
 
-    ESP_LOGI(TAG, "SoftAP started: SSID=rigo-box3 PASS=rigoberto");
-    ESP_LOGI(TAG, "Control API: http://192.168.4.1:8080/v1/*");
+    if (has_sta) {
+        wifi_config_t sta_config = { 0 };
+        strncpy((char *)sta_config.sta.ssid, CONFIG_RIGO_WIFI_STA_SSID, sizeof(sta_config.sta.ssid) - 1);
+        strncpy((char *)sta_config.sta.password, CONFIG_RIGO_WIFI_STA_PASSWORD, sizeof(sta_config.sta.password) - 1);
+        sta_config.sta.threshold.authmode = WIFI_AUTH_WPA2_PSK;
+        sta_config.sta.pmf_cfg.capable = true;
+        sta_config.sta.pmf_cfg.required = false;
+        ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &sta_config));
+    }
+
+    ESP_ERROR_CHECK(esp_wifi_start());
+    if (has_sta) {
+        esp_wifi_connect();
+    }
+
+    ESP_LOGI(TAG, "AP started: SSID=%s", CONFIG_RIGO_WIFI_AP_SSID);
+    if (has_sta) {
+        ESP_LOGI(TAG, "STA connect requested: SSID=%s", CONFIG_RIGO_WIFI_STA_SSID);
+    }
+    ESP_LOGI(TAG, "Control API: http://192.168.4.1:8080/v1/* (AP)");
 }
 
 void app_main(void)
@@ -396,7 +419,7 @@ void app_main(void)
     bsp_display_unlock();
     bsp_display_backlight_on();
 
-    start_softap();
+    start_network();
     start_http_service();
 
     ESP_LOGI(TAG, "Rigo avatar + emotion service ready");

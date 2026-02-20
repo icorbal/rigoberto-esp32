@@ -1,0 +1,19 @@
+menu "Rigo Avatar Network"
+
+config RIGO_WIFI_AP_SSID
+    string "SoftAP SSID"
+    default "rigo-box3"
+
+config RIGO_WIFI_AP_PASSWORD
+    string "SoftAP Password"
+    default "rigoberto"
+
+config RIGO_WIFI_STA_SSID
+    string "Station Wi-Fi SSID"
+    default ""
+
+config RIGO_WIFI_STA_PASSWORD
+    string "Station Wi-Fi Password"
+    default ""
+
+endmenu
