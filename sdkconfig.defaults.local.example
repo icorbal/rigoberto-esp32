@@ -1,5 +1,0 @@
-# Copy this file to sdkconfig.defaults.local and fill with your real Wi-Fi.
-# This file is ignored by git.
-
-CONFIG_RIGO_WIFI_STA_SSID="YOUR_WIFI_SSID"
-CONFIG_RIGO_WIFI_STA_PASSWORD="YOUR_WIFI_PASSWORD"
