@@ -2,4 +2,5 @@ description: Rigoberto avatar face demo
 
 dependencies:
   espressif/esp-box-3: "*"
+  espressif/esp-sr: "^2.2.0"
   lvgl/lvgl: "~9"

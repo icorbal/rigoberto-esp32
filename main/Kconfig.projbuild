@@ -1,4 +1,4 @@
-menu "Rigo Avatar Network"
+menu "Rigo Voice + Network"
 
 config RIGO_WIFI_AP_SSID
     string "SoftAP SSID"
@@ -15,5 +15,26 @@ config RIGO_WIFI_STA_SSID
 config RIGO_WIFI_STA_PASSWORD
     string "Station Wi-Fi Password"
     default ""
+
+config RIGO_STT_URL
+    string "Whisper STT endpoint (POST WAV, JSON response)"
+    default ""
+
+config RIGO_ASSISTANT_URL
+    string "OpenClaw assistant endpoint (POST JSON)"
+    default ""
+
+config RIGO_TTS_URL
+    string "TTS endpoint (POST JSON, WAV response)"
+    default ""
+
+config RIGO_API_BEARER
+    string "Bearer token for cloud APIs"
+    default ""
+
+config RIGO_CAPTURE_MS
+    int "Post-wake capture window (ms)"
+    default 3500
+    range 1000 10000
 
 endmenu

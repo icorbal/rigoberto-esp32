@@ -1,53 +1,91 @@
-| Supported Targets | ESP32 | ESP32-C2 | ESP32-C3 | ESP32-C5 | ESP32-C6 | ESP32-C61 | ESP32-H2 | ESP32-P4 | ESP32-S2 | ESP32-S3 | Linux |
-| ----------------- | ----- | -------- | -------- | -------- | -------- | --------- | -------- | -------- | -------- | -------- | ----- |
+# Rigoberto ESP32-S3-BOX3 Voice Pipeline (Path-1)
 
-# Hello World Example
+Wake word + cloud assistant loop on ESP32-S3-BOX3:
 
-Starts a FreeRTOS task to print "Hello World".
+1. **WakeNet** listens for built-in wake word **"Hi ESP"**
+2. Captures post-wake speech audio (PCM)
+3. Sends WAV to **Whisper STT** endpoint
+4. Sends transcribed text to **OpenClaw assistant** endpoint
+5. Sends assistant reply text to **TTS** endpoint
+6. Plays WAV reply on speaker
+7. Drives avatar mouth/talk animation during playback
 
-(See the README.md file in the upper level 'examples' directory for more information about examples.)
+Also exposes a minimal avatar API at `:8080` (`/v1/state`, `/v1/perform`).
 
-## How to use example
+## Requirements
 
-Follow detailed instructions provided specifically for this example.
+- ESP-IDF v5.5.x
+- ESP32-S3-BOX3 connected on `/dev/ttyACM0`
+- Network access from board to your cloud endpoints
+- Endpoint contracts:
+  - STT: `POST audio/wav` -> JSON `{ "text": "..." }`
+  - Assistant: `POST application/json {"text":"..."}` -> JSON `{ "reply": "..." }` (or `text`)
+  - TTS: `POST application/json {"text":"..."}` -> raw WAV bytes (PCM16)
 
-Select the instructions depending on Espressif chip installed on your development board:
+## Config
 
-- [ESP32 Getting Started Guide](https://docs.espressif.com/projects/esp-idf/en/stable/get-started/index.html)
-- [ESP32-S2 Getting Started Guide](https://docs.espressif.com/projects/esp-idf/en/latest/esp32s2/get-started/index.html)
+Do **not** put secrets in tracked files.
 
+- Safe defaults: `sdkconfig.defaults`
+- Local secrets (gitignored): `sdkconfig.defaults.local`
 
-## Example folder contents
+Example local file:
 
-The project **hello_world** contains one source file in C language [hello_world_main.c](main/hello_world_main.c). The file is located in folder [main](main).
-
-ESP-IDF projects are built using CMake. The project build configuration is contained in `CMakeLists.txt` files that provide set of directives and instructions describing the project's source files and targets (executable, library, or both).
-
-Below is short explanation of remaining files in the project folder.
-
+```ini
+CONFIG_RIGO_WIFI_STA_SSID="YOUR_WIFI_SSID"
+CONFIG_RIGO_WIFI_STA_PASSWORD="YOUR_WIFI_PASSWORD"
+CONFIG_RIGO_STT_URL="https://your-api.example.com/stt"
+CONFIG_RIGO_ASSISTANT_URL="https://your-api.example.com/assistant"
+CONFIG_RIGO_TTS_URL="https://your-api.example.com/tts"
+CONFIG_RIGO_API_BEARER="YOUR_BEARER_TOKEN"
 ```
-├── CMakeLists.txt
-├── pytest_hello_world.py      Python script used for automated testing
-├── main
-│   ├── CMakeLists.txt
-│   └── hello_world_main.c
-└── README.md                  This is the file you are currently reading
+
+## Build / Flash / Monitor
+
+```bash
+cd /home/paisa/projects/rigoberto-esp32
+source /home/paisa/projects/esp-idf-v5.5/export.sh
+idf.py build
+idf.py -p /dev/ttyACM0 flash monitor
 ```
 
-For more information on structure and contents of ESP-IDF projects, please refer to Section [Build System](https://docs.espressif.com/projects/esp-idf/en/latest/esp32/api-guides/build-system.html) of the ESP-IDF Programming Guide.
+## Checkpoints
 
-## Troubleshooting
+### Checkpoint A: Build passes
 
-* Program upload failure
+```bash
+idf.py build
+```
 
-    * Hardware connection is not correct: run `idf.py -p PORT monitor`, and reboot your board to see if there are any output logs.
-    * The baud rate for downloading is too high: lower your baud rate in the `menuconfig` menu, and try again.
+Expected: successful build and generated `build/hello_world.bin`.
 
-## Technical support and feedback
+### Checkpoint B: Device boots and WakeNet starts
 
-Please use the following feedback channels:
+On serial monitor, look for logs similar to:
 
-* For technical queries, go to the [esp32.com](https://esp32.com/) forum
-* For a feature request or bug report, create a [GitHub issue](https://github.com/espressif/esp-idf/issues)
+- `Rigo voice pipeline ready`
+- `WakeNet ready (...). Say: Hi ESP`
 
-We will get back to you as soon as possible.
+### Checkpoint C: Avatar API reachable
+
+From host (replace IP with STA IP from serial logs):
+
+```bash
+curl -s http://<BOX3_IP>:8080/v1/state
+curl -s -X POST http://<BOX3_IP>:8080/v1/perform \
+  -H 'content-type: application/json' \
+  -d '{"emotion":"happy","talk":true,"duration_ms":1200}'
+```
+
+### Checkpoint D: End-to-end voice loop
+
+1. Say: **"Hi ESP"**
+2. Speak a short phrase after wake (capture window default 3.5s)
+3. Confirm serial logs show STT + Assistant text
+4. Confirm spoken TTS reply and avatar mouth animation
+
+## Notes
+
+- Wake model enabled by default: `CONFIG_SR_WN_WN9_HIESP=y`
+- Capture window is configurable via `CONFIG_RIGO_CAPTURE_MS`
+- Keep endpoint adapters simple; this firmware expects the response shapes above.
